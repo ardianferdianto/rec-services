@@ -1,0 +1,35 @@
+app:
+  env: "local"
+  name: "reconciliation-service"
+  api_prefix: "reconciliation-service"
+
+server:
+  port: "8080"
+
+worker:
+  max_workers: 1
+
+database:
+  master:
+    driver: postgres
+    name: "reconciliation_services"
+    host: localhost
+    port: 5433
+    user: root
+    password: secret
+    max_open: 5
+    min_idle: 2
+    max_lifetime: 5m
+
+storage:
+  endpoint: "localhost:9000"
+  client_id: "minioadmin"
+  client_secret: "minioadmin"
+  bucket: "reconciliation"
+
+log:
+  level: "debug"
+
+basic_auth:
+  client_id: dev
+  client_secret: foobar

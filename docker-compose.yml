@@ -1,0 +1,64 @@
+version: '3.7'
+
+services:
+#  app:
+#    build: .
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      - db
+#      - minio
+#    environment:
+#      MINIO_ENDPOINT: minio:9000
+#      MINIO_ACCESS_KEY: minioadmin
+#      MINIO_SECRET_KEY: minioadmin
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: reconciliation_services
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_CONSOLE_ADDRESS: ":9001"
+#    command: server /data --console-address ":9001"
+    command: minio server /data --address ":9000" --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  setup_minio:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO...';
+      until /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin; do
+        sleep 3;
+      done;
+      echo 'Creating bucket...';
+      /usr/bin/mc mb myminio/reconciliation;
+      echo 'Buckets created successfully.';
+      exit 0;"
+    restart: on-failure
+
+volumes:
+  db_data:
+  minio_data:

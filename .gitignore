@@ -1,0 +1,10 @@
+.DS_Store
+bin/*
+.idea
+secret.yaml
+config.yaml
+vendor/
+.vscode/
+tmp
+# env file
+.env
