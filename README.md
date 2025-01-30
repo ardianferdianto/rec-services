@@ -1,6 +1,13 @@
 # Reconciliation Service
 **Description:** Responsible in reconciliate system generated transaction with bank statements
-# Seq diagram
+# Assumption
+1. Both system transactions and bank statements are provided as separate CSV files. 
+2. Discrepancies only occur in amount.
+3. User know the path of uploaded file, the upstream should be able to store csv somewhere in object storage. hence we dont create upload mechanism
+4. Transaction and bank statement files is using generic format, but the code was designed to cater customization later
+5. Data needs to be auditable
+
+# Sequence diagram
 ```mermaid
 sequenceDiagram
     autonumber
@@ -47,10 +54,14 @@ sequenceDiagram
     note right of W: Workflow is fully done, user can audit by workflow_id /workflow/<workflow_id>
 ```
 # Architecture
+## available endpoint
+1. ``POST {baseURL}/reconciliation-service/v1/workflow`` starting reconciliation workfow
+2. ``GET {baseURL}/reconciliation-service/v1/workflow/<workflow_id>`` get result summary
+
 ## Layering
 This is the overview of this repository architecture layer
 
-`cmd/server/main` ↔ `internal/presenter` ↔ `internal/usecase` and `internal/domain` ↔ `internal/infrastructure/` ↔ `Database/Message Broker/APIs`
+`cmd/tms/main` ↔ `internal/presenter` ↔ `internal/usecase` and `internal/model` ↔ `internal/infrastructure/` ↔ `Database/PubSub/APIs`
 
 ### Main
 This folder is the entrypoint of this repository. Main initialize these things listed below:
@@ -68,9 +79,8 @@ Usecase and model contain business logic of this repository.
 ### Infrastructure
 Infrasturcture layer contains infrastructure code needed for business logic purposes. This may include code such as initiating external API calls, SQL store, PubSub, etc.
 
-# Development Environment Setup
-This section will guide on how to setup this repository on your local machine. You can also add how to solve some problems during setup process on the troubleshooting section.
-
+# Environment Setup
+This section will guide on how to setup this repository on your local machine.
 ## Initial Setup
 ### Initialization
 Run this command to download external dependencies and download required package.
@@ -123,22 +133,65 @@ To run all unit tests, you can use this command below.
 make test
 ```
 
-## Troubleshooting
-Note that sometimes when you already install some of the dependencies, the binary is not located on the $PATH variable yet which makes it not accesible globally. To fix this, do these steps:
-
-1. Find out your default shell configuration file (`.bashrc`, `.zshrc`, etc)
-2. Add this command
+# Conduct Test
+User expected to upload the file into storage first (minio), hence docker-compose.yaml provide minio as the storage
+## sample request
+### Start reconcile
+#### Request
 ```
-export GO111MODULE = on
-export PATH=$PATH:/home/[your_username]/[your_go_path]/bin
-export GOPRIVATE = gitlab.com
+curl --location 'http://localhost:8080/reconciliation-service/v1/workflow' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Basic ZGV2OmZvb2Jhcg==' \
+--data '{
+  "system_transaction_file_path": "tx1.csv",
+  "bank_statement_file_paths": [
+    "bank_statements.csv",
+    "bs1.csv"
+  ],
+  "start_date": "2025-01-01T00:00:00Z",
+  "end_date": "2025-01-31T23:59:59Z"
+}'
 ```
-3. Restart your terminal
-
-`export GO111MODULE=on` is a command that sets the GO111MODULE environment variable to the value `on`. This variable controls how Go manages dependencies in your projects.
-
-`export PATH=$PATH:/home/[your_username]/[your_go_path]/bin` is used to add your custom go binary into the PATH variable to make it accessible globally. Please adjust the PATH accordingly with your own Go folder location.
-
-`export GOPRIVATE = gitlab.com` is to make imports using SSH instead of regular HTTP from gitlab.com.
-
-
+### Get result
+#### Request
+```
+curl --location 'http://localhost:8080/reconciliation-service/v1/workflow/45c163be-706a-4abf-9110-747d31553f23' \
+--header 'Authorization: Basic ZGV2OmZvb2Jhcg=='
+```
+#### Response
+```
+{
+    "workflow_id": "45c163be-706a-4abf-9110-747d31553f23",
+    "status": "COMPLETED",
+    "start_date": "2025-01-01T00:00:00Z",
+    "end_date": "2025-01-31T00:00:00Z",
+    "reconciliation_summary": {
+        "total_transactions_processed": 15,
+        "total_matched_transactions": 4,
+        "total_unmatched_transactions": 11,
+        "unmatched_system_transactions": [
+            {
+                "TrxID": "EHEJNYRUGJ",
+                "Amount": 1662.82,
+                "Type": "Debit",
+                "TransactionTime": "2025-01-03T07:32:27Z",
+                "CreatedAt": "0001-01-01T00:00:00Z",
+                "UpdatedAt": "0001-01-01T00:00:00Z"
+            },
+        ],
+        "unmatched_bank_transactions_by_bank": {
+            "BNI": [
+                {
+                    "UniqueID": "TX9999",
+                    "Amount": 999.99,
+                    "StatementDate": "2025-01-06T00:00:00Z",
+                    "BankCode": "BNI",
+                    "CreatedAt": "0001-01-01T00:00:00Z",
+                    "UpdatedAt": "0001-01-01T00:00:00Z"
+                }
+            ]
+        },
+        "total_discrepancies": 400
+    }
+}
+```
