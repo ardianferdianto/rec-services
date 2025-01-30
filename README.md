@@ -1,7 +1,7 @@
 # Reconciliation Service
 **Description:** Responsible in reconciliate system generated transaction with bank statements
 # Seq diagram
-sequenceDiagram
+```mermaid
     autonumber
 
     participant U as User (Client)
@@ -44,6 +44,7 @@ sequenceDiagram
         W->>DB: Update Workflow => COMPLETED
     end
     note right of W: Workflow is fully done, user can audit by workflow_id /workflow/<workflow_id>
+```
 # Architecture
 ## Layering
 This is the overview of this repository architecture layer
