@@ -1,6 +1,49 @@
 # Reconciliation Service
 **Description:** Responsible in reconciliate system generated transaction with bank statements
-# Seq diagramsequenceDiagram
+# Seq diagram
+sequenceDiagram
+    autonumber
+
+    participant U as User (Client)
+    participant S as Service (API)
+    participant DB as Database
+    participant W as Worker
+    participant O as Object Storage (MinIO/S3)
+
+    U->>S: POST /workflow (system_csv, bank_csv, start_date, end_date)
+    note right of U: Uploaded filename & date range
+
+    S->>O: Upload system_csv
+    S->>O: Upload bank_csv
+    S->>DB: Create a new Workflow record (status=IN_PROGRESS)
+    S->>DB: Insert Ingestion Job (system_csv) => status=PENDING
+    S->>DB: Insert Ingestion Job (bank_csv) => status=PENDING
+    S-->>U: Returns JSON { "workflow_id": ... }
+
+    note over W: Background Worker Loop
+
+    W->>DB: List ingestion jobs (status=PENDING)
+    alt Found a pending job
+        W->>DB: Mark job IN_PROGRESS
+        W->>O: Download CSV object
+        W->>DB: Parse & batch-insert data
+        W->>DB: Update ingestion job => COMPLETED
+    else No pending job
+        W->>W: Wait or Sleep
+    end
+
+    note over W: After each ingestion job completes
+
+    W->>DB: Check the Workflow referencing these ingestion jobs
+    alt Both system & bank jobs COMPLETED
+        W->>DB: Create a Reconciliation Job => status=RUNNING
+        W->>DB: Fetch data in [start_date, end_date]
+        W->>DB: Match transactions vs. statements
+        W->>DB: Insert Reconciliation Result => summary of matched/unmatched
+        W->>DB: Mark Reconciliation Job => COMPLETED
+        W->>DB: Update Workflow => COMPLETED
+    end
+    note right of W: Workflow is fully done, user can audit by workflow_id /workflow/<workflow_id>
 # Architecture
 ## Layering
 This is the overview of this repository architecture layer
