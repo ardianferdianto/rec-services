@@ -2,6 +2,7 @@
 **Description:** Responsible in reconciliate system generated transaction with bank statements
 # Seq diagram
 ```mermaid
+sequenceDiagram
     autonumber
 
     participant U as User (Client)
